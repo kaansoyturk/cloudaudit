@@ -17,18 +17,9 @@
         .hero p { color: #8b949e; font-size: 16px; margin-bottom: 40px; }
 
         .search-box { display: flex; gap: 12px; max-width: 600px; margin: 0 auto; }
-        .search-box input {
-            flex: 1; padding: 14px 20px; background: #161b22;
-            border: 1px solid #30363d; border-radius: 8px;
-            color: #e6edf3; font-size: 16px; outline: none;
-        }
+        .search-box input { flex: 1; padding: 14px 20px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; color: #e6edf3; font-size: 16px; outline: none; }
         .search-box input:focus { border-color: #58a6ff; }
-        .search-box button {
-            padding: 14px 28px; background: #238636;
-            border: none; border-radius: 8px; color: white;
-            font-size: 16px; cursor: pointer; font-weight: 600;
-            transition: background 0.2s;
-        }
+        .search-box button { padding: 14px 28px; background: #238636; border: none; border-radius: 8px; color: white; font-size: 16px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
         .search-box button:hover { background: #2ea043; }
         .search-box button:disabled { background: #21262d; cursor: not-allowed; }
 
@@ -58,6 +49,9 @@
         .score-item-label { font-size: 11px; color: #8b949e; margin-bottom: 4px; }
         .score-item-value { font-size: 20px; font-weight: 700; color: #58a6ff; }
 
+        .download-btn { display: inline-block; margin-top: 20px; padding: 12px 28px; background: #1f6feb; border: none; border-radius: 8px; color: white; font-size: 14px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        .download-btn:hover { background: #388bfd; }
+
         .section { background: #161b22; border: 1px solid #21262d; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
         .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
         .section-title { font-size: 16px; font-weight: 600; color: #e6edf3; }
@@ -73,7 +67,6 @@
         .tag-green { background: #1a3a2a; color: #3fb950; }
         .tag-red { background: #3a1a1a; color: #f85149; }
         .tag-yellow { background: #3a2a0a; color: #d29922; }
-        .tag-gray { background: #21262d; color: #8b949e; }
 
         .issue-list { list-style: none; }
         .issue-list li { padding: 8px 12px; background: #3a1a1a; border-radius: 6px; color: #f85149; font-size: 13px; margin-bottom: 6px; }
@@ -118,82 +111,95 @@
 <div class="results" id="results"></div>
 
 <script>
-function setDomain(domain) {
-    document.getElementById("domain-input").value = domain;
-}
+    let lastScanData = null;
+    let lastDomain = null;
 
-document.getElementById("domain-input").addEventListener("keypress", function(e) {
-    if (e.key === "Enter") startScan();
-});
+    function setDomain(domain) {
+        document.getElementById("domain-input").value = domain;
+    }
 
-const loadingMessages = [
-    "DNS analizi yapılıyor...",
-    "SSL sertifikası kontrol ediliyor...",
-    "Portlar taranıyor...",
-    "Cloud altyapısı tespit ediliyor...",
-    "Email güvenliği analiz ediliyor...",
-    "Güvenlik skoru hesaplanıyor..."
-];
+    document.getElementById("domain-input").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") startScan();
+    });
 
-async function startScan() {
-    const domain = document.getElementById("domain-input").value.trim();
-    if (!domain) return;
+    const loadingMessages = [
+        "DNS analizi yapılıyor...",
+        "SSL sertifikası kontrol ediliyor...",
+        "Portlar taranıyor...",
+        "Cloud altyapısı tespit ediliyor...",
+        "Email güvenliği analiz ediliyor...",
+        "Güvenlik skoru hesaplanıyor..."
+    ];
 
-    document.getElementById("scan-btn").disabled = true;
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("results").style.display = "none";
+    async function startScan() {
+        const domain = document.getElementById("domain-input").value.trim();
+        if (!domain) return;
 
-    let msgIndex = 0;
-    const msgInterval = setInterval(() => {
-        document.getElementById("loading-text").textContent = loadingMessages[msgIndex % loadingMessages.length];
-        msgIndex++;
-    }, 2000);
+        document.getElementById("scan-btn").disabled = true;
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("results").style.display = "none";
 
-    try {
-        const response = await fetch("/scan", {
+        let msgIndex = 0;
+        const msgInterval = setInterval(() => {
+            document.getElementById("loading-text").textContent = loadingMessages[msgIndex % loadingMessages.length];
+            msgIndex++;
+        }, 2000);
+
+        try {
+            const response = await fetch("/scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ domain })
+            });
+
+            const data = await response.json();
+            clearInterval(msgInterval);
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("scan-btn").disabled = false;
+
+            if (data.error) { showError(data.error); return; }
+
+            lastScanData = data;
+            lastDomain = data.domain;
+            showResults(data);
+
+        } catch (err) {
+            clearInterval(msgInterval);
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("scan-btn").disabled = false;
+            showError("Bağlantı hatası: " + err.message);
+        }
+    }
+
+    function showError(message) {
+        const results = document.getElementById("results");
+        results.style.display = "block";
+        results.innerHTML = `<div class="error-box">❌ ${message}</div>`;
+    }
+
+    async function downloadReport() {
+        if (!lastScanData || !lastDomain) return;
+        const response = await fetch("/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain })
+            body: JSON.stringify({ domain: lastDomain, scan_data: lastScanData })
         });
-
-        const data = await response.json();
-        clearInterval(msgInterval);
-        document.getElementById("loading").style.display = "none";
-        document.getElementById("scan-btn").disabled = false;
-
-        if (data.error) {
-            showError(data.error);
-            return;
-        }
-
-        showResults(data);
-
-    } catch (err) {
-        clearInterval(msgInterval);
-        document.getElementById("loading").style.display = "none";
-        document.getElementById("scan-btn").disabled = false;
-        showError("Bağlantı hatası: " + err.message);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `cloudaudit_${lastDomain}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
     }
-}
 
-function showError(message) {
-    const results = document.getElementById("results");
-    results.style.display = "block";
-    results.innerHTML = `<div class="error-box">❌ ${message}</div>`;
-}
+    function showResults(data) {
+        const results = document.getElementById("results");
+        results.style.display = "block";
+        const s = data.score;
+        const scoreClass = `score-${s.color}`;
 
-function getScoreClass(color) {
-    return `score-${color}`;
-}
-
-function showResults(data) {
-    const results = document.getElementById("results");
-    results.style.display = "block";
-
-    const s = data.score;
-    const scoreClass = getScoreClass(s.color);
-
-    let html = `
+        let html = `
         <div class="score-card">
             <div class="score-number ${scoreClass}">${s.total_score}</div>
             <div class="score-grade ${scoreClass}">${s.grade} — ${s.level}</div>
@@ -205,92 +211,74 @@ function showResults(data) {
                 <div class="score-item"><div class="score-item-label">CLOUD</div><div class="score-item-value">${s.scores.cloud}</div></div>
                 <div class="score-item"><div class="score-item-label">EMAIL</div><div class="score-item-value">${s.scores.email}</div></div>
             </div>
+            <button class="download-btn" onclick="downloadReport()">📄 PDF Rapor İndir</button>
         </div>`;
 
-    // Sorunlar
-    if (s.all_issues.length > 0) {
+        if (s.all_issues.length > 0) {
+            html += `<div class="section">
+                <div class="section-header"><span>⚠️</span><span class="section-title">Tespit Edilen Sorunlar</span><span class="section-badge">${s.all_issues.length} sorun</span></div>
+                <ul class="issue-list">${s.all_issues.map(i => `<li>${i}</li>`).join("")}</ul>
+            </div>`;
+        }
+
         html += `<div class="section">
-            <div class="section-header">
-                <span>⚠️</span>
-                <span class="section-title">Tespit Edilen Sorunlar</span>
-                <span class="section-badge">${s.all_issues.length} sorun</span>
+            <div class="section-header"><span>🌐</span><span class="section-title">DNS Analizi</span><span class="section-badge">Skor: ${data.dns.score}</span></div>
+            <div class="info-grid">
+                <div class="info-item"><div class="info-label">A Kayıtları</div><div class="info-value">${data.dns.a_records.join(", ") || "Yok"}</div></div>
+                <div class="info-item"><div class="info-label">NS Kayıtları</div><div class="info-value">${data.dns.ns_records.slice(0,2).join(", ") || "Yok"}</div></div>
+                <div class="info-item"><div class="info-label">SPF</div><div class="info-value">${data.dns.spf ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
+                <div class="info-item"><div class="info-label">DMARC</div><div class="info-value">${data.dns.dmarc ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
+                <div class="info-item"><div class="info-label">DNSSEC</div><div class="info-value">${data.dns.dnssec ? '<span class="tag tag-green">✓ Aktif</span>' : '<span class="tag tag-red">✗ Pasif</span>'}</div></div>
+                <div class="info-item"><div class="info-label">MX Kayıtları</div><div class="info-value">${data.dns.mx_records.length > 0 ? data.dns.mx_records[0] : "Yok"}</div></div>
             </div>
-            <ul class="issue-list">
-                ${s.all_issues.map(i => `<li>${i}</li>`).join("")}
-            </ul>
         </div>`;
+
+        html += `<div class="section">
+            <div class="section-header"><span>🔒</span><span class="section-title">SSL Analizi</span><span class="section-badge">Skor: ${data.ssl.score}</span></div>
+            <div class="info-grid">
+                <div class="info-item"><div class="info-label">HTTPS</div><div class="info-value">${data.ssl.has_ssl ? '<span class="tag tag-green">✓ Aktif</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
+                <div class="info-item"><div class="info-label">Yayıncı</div><div class="info-value">${data.ssl.issuer || "Bilinmiyor"}</div></div>
+                <div class="info-item"><div class="info-label">Son Kullanma</div><div class="info-value">${data.ssl.expiry_date || "Bilinmiyor"}</div></div>
+                <div class="info-item"><div class="info-label">Kalan Gün</div><div class="info-value">${data.ssl.days_until_expiry !== null ? data.ssl.days_until_expiry + " gün" : "Bilinmiyor"}</div></div>
+                <div class="info-item"><div class="info-label">Versiyon</div><div class="info-value">${data.ssl.version || "Bilinmiyor"}</div></div>
+                <div class="info-item"><div class="info-label">Cipher</div><div class="info-value">${data.ssl.cipher || "Bilinmiyor"}</div></div>
+            </div>
+        </div>`;
+
+        const openPorts = data.ports.open_ports || [];
+        html += `<div class="section">
+            <div class="section-header"><span>🚪</span><span class="section-title">Port Tarama</span><span class="section-badge">${openPorts.length} açık port</span></div>
+            <div class="port-grid">
+                ${openPorts.map(p => `<div class="port-item ${p.dangerous ? 'port-danger' : 'port-safe'}">${p.dangerous ? '⚠' : '✓'} ${p.port} — ${p.service}</div>`).join("") || "<span style='color:#8b949e'>Açık port bulunamadı</span>"}
+            </div>
+        </div>`;
+
+        html += `<div class="section">
+            <div class="section-header"><span>☁️</span><span class="section-title">Cloud Tespiti</span><span class="section-badge">Skor: ${data.cloud.score}</span></div>
+            <div class="info-grid">
+                <div class="info-item"><div class="info-label">IP Adresi</div><div class="info-value">${data.cloud.ip || "Bilinmiyor"}</div></div>
+                <div class="info-item"><div class="info-label">Cloud Provider</div><div class="info-value">${data.cloud.cloud_provider ? '<span class="tag tag-blue">' + data.cloud.cloud_provider + '</span>' : "Tespit edilemedi"}</div></div>
+                <div class="info-item"><div class="info-label">CDN</div><div class="info-value">${data.cloud.cdn ? '<span class="tag tag-blue">' + data.cloud.cdn + '</span>' : "Yok"}</div></div>
+                <div class="info-item"><div class="info-label">Server</div><div class="info-value">${data.cloud.server || "Gizli"}</div></div>
+                <div class="info-item"><div class="info-label">Güvenlik Header'ları</div><div class="info-value">${Object.keys(data.cloud.security_headers).length} / 7</div></div>
+                <div class="info-item"><div class="info-label">Eksik Header'lar</div><div class="info-value">${data.cloud.missing_headers.length > 0 ? data.cloud.missing_headers.length + ' eksik' : '<span class="tag tag-green">Hepsi mevcut</span>'}</div></div>
+            </div>
+        </div>`;
+
+        html += `<div class="section">
+            <div class="section-header"><span>📧</span><span class="section-title">Email Güvenliği</span><span class="section-badge">Skor: ${data.email.score}</span></div>
+            <div class="info-grid">
+                <div class="info-item"><div class="info-label">SPF</div><div class="info-value">${data.email.spf ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
+                <div class="info-item"><div class="info-label">DMARC</div><div class="info-value">${data.email.dmarc ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
+                <div class="info-item"><div class="info-label">DKIM</div><div class="info-value">${data.email.dkim_exists ? '<span class="tag tag-green">✓ Tespit edildi</span>' : '<span class="tag tag-yellow">? Tespit edilemedi</span>'}</div></div>
+                <div class="info-item"><div class="info-label">MX Kayıtları</div><div class="info-value">${data.email.mx_records.length > 0 ? data.email.mx_records[0] : "Yok"}</div></div>
+            </div>
+            ${data.email.recommendations.length > 0 ? `<div style="margin-top:12px">${data.email.recommendations.map(r => `<div style="padding:6px 10px;background:#1f3a2a;border-radius:6px;color:#3fb950;font-size:12px;margin-bottom:4px">💡 ${r}</div>`).join("")}</div>` : ""}
+        </div>`;
+
+        results.innerHTML = html;
+        results.scrollIntoView({ behavior: "smooth" });
     }
-
-    // DNS
-    html += `<div class="section">
-        <div class="section-header"><span>🌐</span><span class="section-title">DNS Analizi</span><span class="section-badge">Skor: ${data.dns.score}</span></div>
-        <div class="info-grid">
-            <div class="info-item"><div class="info-label">A Kayıtları</div><div class="info-value">${data.dns.a_records.join(", ") || "Yok"}</div></div>
-            <div class="info-item"><div class="info-label">NS Kayıtları</div><div class="info-value">${data.dns.ns_records.slice(0,2).join(", ") || "Yok"}</div></div>
-            <div class="info-item"><div class="info-label">SPF</div><div class="info-value">${data.dns.spf ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
-            <div class="info-item"><div class="info-label">DMARC</div><div class="info-value">${data.dns.dmarc ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
-            <div class="info-item"><div class="info-label">DNSSEC</div><div class="info-value">${data.dns.dnssec ? '<span class="tag tag-green">✓ Aktif</span>' : '<span class="tag tag-red">✗ Pasif</span>'}</div></div>
-            <div class="info-item"><div class="info-label">MX Kayıtları</div><div class="info-value">${data.dns.mx_records.length > 0 ? data.dns.mx_records[0] : "Yok"}</div></div>
-        </div>
-    </div>`;
-
-    // SSL
-    html += `<div class="section">
-        <div class="section-header"><span>🔒</span><span class="section-title">SSL Analizi</span><span class="section-badge">Skor: ${data.ssl.score}</span></div>
-        <div class="info-grid">
-            <div class="info-item"><div class="info-label">HTTPS</div><div class="info-value">${data.ssl.has_ssl ? '<span class="tag tag-green">✓ Aktif</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
-            <div class="info-item"><div class="info-label">Yayıncı</div><div class="info-value">${data.ssl.issuer || "Bilinmiyor"}</div></div>
-            <div class="info-item"><div class="info-label">Son Kullanma</div><div class="info-value">${data.ssl.expiry_date || "Bilinmiyor"}</div></div>
-            <div class="info-item"><div class="info-label">Kalan Gün</div><div class="info-value">${data.ssl.days_until_expiry !== null ? data.ssl.days_until_expiry + " gün" : "Bilinmiyor"}</div></div>
-            <div class="info-item"><div class="info-label">Versiyon</div><div class="info-value">${data.ssl.version || "Bilinmiyor"}</div></div>
-            <div class="info-item"><div class="info-label">Cipher</div><div class="info-value">${data.ssl.cipher || "Bilinmiyor"}</div></div>
-        </div>
-    </div>`;
-
-    // Portlar
-    const openPorts = data.ports.open_ports || [];
-    html += `<div class="section">
-        <div class="section-header"><span>🚪</span><span class="section-title">Port Tarama</span><span class="section-badge">${openPorts.length} açık port</span></div>
-        <div class="port-grid">
-            ${openPorts.map(p => `
-                <div class="port-item ${p.dangerous ? 'port-danger' : 'port-safe'}">
-                    ${p.dangerous ? '⚠' : '✓'} ${p.port} — ${p.service}
-                </div>
-            `).join("") || "<span style='color:#8b949e'>Açık port bulunamadı</span>"}
-        </div>
-    </div>`;
-
-    // Cloud
-    html += `<div class="section">
-        <div class="section-header"><span>☁️</span><span class="section-title">Cloud Tespiti</span><span class="section-badge">Skor: ${data.cloud.score}</span></div>
-        <div class="info-grid">
-            <div class="info-item"><div class="info-label">IP Adresi</div><div class="info-value">${data.cloud.ip || "Bilinmiyor"}</div></div>
-            <div class="info-item"><div class="info-label">Cloud Provider</div><div class="info-value">${data.cloud.cloud_provider ? '<span class="tag tag-blue">' + data.cloud.cloud_provider + '</span>' : "Tespit edilemedi"}</div></div>
-            <div class="info-item"><div class="info-label">CDN</div><div class="info-value">${data.cloud.cdn ? '<span class="tag tag-blue">' + data.cloud.cdn + '</span>' : "Yok"}</div></div>
-            <div class="info-item"><div class="info-label">Server</div><div class="info-value">${data.cloud.server || "Gizli"}</div></div>
-            <div class="info-item"><div class="info-label">Güvenlik Header'ları</div><div class="info-value">${Object.keys(data.cloud.security_headers).length} / 7</div></div>
-            <div class="info-item"><div class="info-label">Eksik Header'lar</div><div class="info-value">${data.cloud.missing_headers.length > 0 ? data.cloud.missing_headers.length + ' eksik' : '<span class="tag tag-green">Hepsi mevcut</span>'}</div></div>
-        </div>
-    </div>`;
-
-    // Email
-    html += `<div class="section">
-        <div class="section-header"><span>📧</span><span class="section-title">Email Güvenliği</span><span class="section-badge">Skor: ${data.email.score}</span></div>
-        <div class="info-grid">
-            <div class="info-item"><div class="info-label">SPF</div><div class="info-value">${data.email.spf ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
-            <div class="info-item"><div class="info-label">DMARC</div><div class="info-value">${data.email.dmarc ? '<span class="tag tag-green">✓ Var</span>' : '<span class="tag tag-red">✗ Yok</span>'}</div></div>
-            <div class="info-item"><div class="info-label">DKIM</div><div class="info-value">${data.email.dkim_exists ? '<span class="tag tag-green">✓ Tespit edildi</span>' : '<span class="tag tag-yellow">? Tespit edilemedi</span>'}</div></div>
-            <div class="info-item"><div class="info-label">MX Kayıtları</div><div class="info-value">${data.email.mx_records.length > 0 ? data.email.mx_records[0] : "Yok"}</div></div>
-        </div>
-        ${data.email.recommendations.length > 0 ? `
-        <div style="margin-top:12px">
-            ${data.email.recommendations.map(r => `<div style="padding:6px 10px;background:#1f3a2a;border-radius:6px;color:#3fb950;font-size:12px;margin-bottom:4px">💡 ${r}</div>`).join("")}
-        </div>` : ""}
-    </div>`;
-
-    results.innerHTML = html;
-    results.scrollIntoView({ behavior: "smooth" });
-}
 </script>
 </body>
 </html>
