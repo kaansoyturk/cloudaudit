@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarama Geçmişi — CloudAudit</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+        .header { background: #161b22; border-bottom: 1px solid #21262d; padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header a { color: #58a6ff; font-size: 24px; text-decoration: none; font-weight: 700; }
+        .header-right { display: flex; align-items: center; gap: 16px; }
+        .header-right span { color: #8b949e; font-size: 14px; }
+        .header-right a { color: #58a6ff; font-size: 14px; text-decoration: none; }
+        .header-right a:hover { text-decoration: underline; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 40px; }
+        h2 { color: #e6edf3; font-size: 24px; margin-bottom: 24px; }
+        .empty { text-align: center; padding: 60px; color: #8b949e; }
+        .empty a { color: #58a6ff; text-decoration: none; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 20px; text-align: center; }
+        .stat-number { font-size: 32px; font-weight: 700; color: #58a6ff; }
+        .stat-label { font-size: 12px; color: #8b949e; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 12px; overflow: hidden; }
+        th { background: #0d1117; color: #58a6ff; padding: 12px 16px; text-align: left; font-size: 13px; }
+        td { padding: 12px 16px; border-bottom: 1px solid #21262d; font-size: 13px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #1c2128; }
+        .score-green { color: #3fb950; font-weight: 700; }
+        .score-yellow { color: #d29922; font-weight: 700; }
+        .score-orange { color: #f0883e; font-weight: 700; }
+        .score-red { color: #f85149; font-weight: 700; }
+        .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; }
+        .grade-A { background: #1a3a2a; color: #3fb950; }
+        .grade-B { background: #3a2a0a; color: #d29922; }
+        .grade-C { background: #3a1f0a; color: #f0883e; }
+        .grade-D { background: #3a1a1a; color: #f85149; }
+        .domain-link { color: #58a6ff; text-decoration: none; }
+        .domain-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <a href="/">☁️ CloudAudit</a>
+        </div>
+        <div class="header-right">
+            <span>👤 {{ current_user.username }}</span>
+            <a href="/">Ana Sayfa</a>
+            <a href="/logout">Çıkış</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📜 Tarama Geçmişi</h2>
+
+        {% if scans %}
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ scans|length }}</div>
+                <div class="stat-label">Toplam Tarama</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ scans|length }}</div>
+                <div class="stat-label">Farklı Domain</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ (scans|sum(attribute='score') / scans|length)|round|int }}</div>
+                <div class="stat-label">Ortalama Skor</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ scans|selectattr('grade', 'equalto', 'A')|list|length }}</div>
+                <div class="stat-label">A Skoru</div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Skor</th>
+                    <th>Seviye</th>
+                    <th>DNS</th>
+                    <th>SSL</th>
+                    <th>Port</th>
+                    <th>Email</th>
+                    <th>Sorun</th>
+                    <th>Tarih</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in scans %}
+                <tr>
+                    <td><a href="/" class="domain-link">{{ scan.domain }}</a></td>
+                    <td class="score-{{ 'green' if scan.score >= 80 else 'yellow' if scan.score >= 60 else 'orange' if scan.score >= 40 else 'red' }}">{{ scan.score }}</td>
+                    <td><span class="grade-badge grade-{{ scan.grade }}">{{ scan.grade }} — {{ scan.level }}</span></td>
+                    <td>{{ scan.dns_score }}</td>
+                    <td>{{ scan.ssl_score }}</td>
+                    <td>{{ scan.port_score }}</td>
+                    <td>{{ scan.email_score }}</td>
+                    <td>{{ scan.issue_count }}</td>
+                    <td>{{ scan.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+        <div class="empty">
+            <p>Henüz hiç tarama yapmadın.</p>
+            <br>
+            <a href="/">İlk taramanı yap →</a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
